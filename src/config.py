@@ -1,4 +1,3 @@
-# src/config.py
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -19,24 +18,22 @@ class Settings(BaseSettings):
     CACHE_DIR: Path = BASE_DIR / ".cache"
     LOG_LEVEL: str = "INFO"
 
-    # Baselines / anomaly detection
     TRAILING_HISTORY_WEEKS: int = 8
     VS_OWN_SPIKE_THRESHOLD_PCT: float = 10.0
     VS_PEER_CREEP_THRESHOLD_PCT: float = 20.0
     MIN_OWN_RISE_FOR_PEER_CREEP_PCT: float = 5.0
     HYSTERESIS_KEEP_PEER_PCT: float = 15.0
 
-    # Guardrails
     MAX_WEEKS_OPEN_ENDED_EFFECT: int = 8
     MAGNITUDE_TOLERANCE_PCT: float = 3.0
-    RETRIEVAL_TOP_K: int = 3
+    ALL_ROUTES_MAX_PEER_GAP_PCT: float = 10.0
+    RETRIEVAL_TOP_K: int = 5
 
-    # LLM (defaults to "fake" for zero-credential offline testing)
-    LLM_PROVIDER: Literal["groq", "gemini", "fake"] = "fake"
+    LLM_PROVIDER: Literal["groq", "gemini", "stub"] = "groq"
     GROQ_API_KEY: SecretStr | None = None
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     GEMINI_API_KEY: SecretStr | None = None
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.8-flash"
     LLM_TEMPERATURE: float = 0.0
     LLM_SEED: int = 42
     LLM_MAX_RETRIES: int = 3
@@ -65,11 +62,11 @@ class Settings(BaseSettings):
         if self.LLM_PROVIDER == "groq" and not (
             self.GROQ_API_KEY and self.GROQ_API_KEY.get_secret_value().strip()
         ):
-            raise ValueError("LLM_PROVIDER=groq requires a non-empty GROQ_API_KEY")
+            raise ValueError("LLM_PROVIDER=groq requires a non-empty GROQ_API_KEY in .env")
         if self.LLM_PROVIDER == "gemini" and not (
             self.GEMINI_API_KEY and self.GEMINI_API_KEY.get_secret_value().strip()
         ):
-            raise ValueError("LLM_PROVIDER=gemini requires a non-empty GEMINI_API_KEY")
+            raise ValueError("LLM_PROVIDER=gemini requires a non-empty GEMINI_API_KEY in .env")
         return self
 
     def ensure_dirs(self) -> None:

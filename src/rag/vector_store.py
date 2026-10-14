@@ -1,4 +1,5 @@
-# src/rag/vector_store.py
+from datetime import datetime
+
 import chromadb
 
 from src.config import get_settings
@@ -9,7 +10,7 @@ logger = get_logger(__name__)
 
 
 class NoteVectorStore:
-    """In-memory Chroma vector index with recall-oriented candidate retrieval."""
+    """In-memory Chroma vector index with scope-complete, date-proximity ranked retrieval."""
 
     def __init__(self, notes: dict[str, EnrichedContextNote]) -> None:
         self.notes = notes
@@ -45,32 +46,34 @@ class NoteVectorStore:
         self, route: str, week_of: str, top_k: int | None = None
     ) -> list[EnrichedContextNote]:
         """
-        Recall-oriented candidate retrieval.
-
-        Queries notes matching route scope ('route' or 'All Routes') ranked by relevance.
+        Guarantees inclusion of all scope-matching notes ('route' or 'All Routes'),
+        ranked by date proximity to week_of, route specificity, and dense vector rank.
         """
         settings = get_settings()
         k = top_k or settings.RETRIEVAL_TOP_K
 
+        try:
+            target_date = datetime.strptime(week_of, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = datetime(2025, 1, 1).date()
+
         query = f"Freight shipping cost rise disruptions on route {route} around week {week_of}"
         results = self.collection.query(
-            query_texts=[query], n_results=min(k * 2, len(self.notes))
+            query_texts=[query], n_results=len(self.notes)
+        )
+        dense_order = results["ids"][0] if (results and results["ids"]) else list(self.notes.keys())
+        dense_rank = {nid: idx for idx, nid in enumerate(dense_order)}
+
+        scope_notes = [
+            n for n in self.notes.values() if n.applies_to in (route, "All Routes")
+        ]
+        scope_notes.sort(
+            key=lambda n: (
+                abs((target_date - n.note_date).days),
+                0 if n.applies_to == route else 1,
+                dense_rank.get(n.note_id, 999),
+            )
         )
 
-        retrieved_ids: list[str] = []
-        if results and results["ids"]:
-            for nid in results["ids"][0]:
-                note = self.notes[nid]
-                if note.applies_to in (route, "All Routes"):
-                    retrieved_ids.append(nid)
-                if len(retrieved_ids) >= k:
-                    break
-
-        if len(retrieved_ids) < k and results and results["ids"]:
-            for nid in results["ids"][0]:
-                if nid not in retrieved_ids:
-                    retrieved_ids.append(nid)
-                if len(retrieved_ids) >= k:
-                    break
-
-        return [self.notes[nid] for nid in retrieved_ids]
+        selected = scope_notes[: max(k, len(scope_notes))]
+        return selected

@@ -1,4 +1,3 @@
-# src/llm/cost_tracker.py
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,7 +9,7 @@ logger = get_logger(__name__)
 
 
 class TokenCostTracker:
-    """Tracks token usage and USD cost for all LLM calls in a run."""
+    """Tracks token usage, provider, model, and USD cost for all LLM calls in a run."""
 
     def __init__(
         self,
@@ -18,6 +17,14 @@ class TokenCostTracker:
         price_output_per_mtok: float | None = None,
     ) -> None:
         settings = get_settings()
+        self.provider: str = settings.LLM_PROVIDER
+        self.model: str = (
+            settings.GROQ_MODEL
+            if settings.LLM_PROVIDER == "groq"
+            else settings.GEMINI_MODEL
+            if settings.LLM_PROVIDER == "gemini"
+            else "offline-test-stub"
+        )
         self.price_input = (
             price_input_per_mtok
             if price_input_per_mtok is not None
@@ -39,12 +46,17 @@ class TokenCostTracker:
         completion_tokens: int,
         model: str,
         context: str = "",
+        provider: str | None = None,
     ) -> None:
         self.total_calls += 1
         self.total_input_tokens += prompt_tokens
         self.total_output_tokens += completion_tokens
+        if provider:
+            self.provider = provider
+        self.model = model
         self.records.append({
             "timestamp": datetime.now(UTC).isoformat(),
+            "provider": self.provider,
             "model": model,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -55,6 +67,8 @@ class TokenCostTracker:
         in_cost = (self.total_input_tokens / 1_000_000.0) * self.price_input
         out_cost = (self.total_output_tokens / 1_000_000.0) * self.price_output
         return {
+            "provider": self.provider,
+            "model": self.model,
             "total_calls": self.total_calls,
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,

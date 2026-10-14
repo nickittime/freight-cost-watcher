@@ -123,15 +123,17 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # In src/main.py -> main()
     use_cache = not args.no_cache
-    df_submission, _df_full, tracker, ctx = run_pipeline(use_cache=use_cache)
+    df_submission, df_full, tracker, ctx = run_pipeline(use_cache=use_cache)
 
     print("\n=======================================================")
     print("FREIGHT COST WATCHER - RUN COMPLETE")
     print("=======================================================")
-    print("Total Evaluated Route-Weeks : 728")
+    print(f"Total Evaluated Route-Weeks : {len(df_full)}")
     print(f"Total Anomalies Flagged     : {len(df_submission)}")
     cost_summary = tracker.summary()
+    print(f"LLM Provider / Model        : {cost_summary['provider']} / {cost_summary['model']}")
     print(f"Total LLM Calls             : {cost_summary['total_calls']}")
     print(
         f"Total Tokens                : {cost_summary['total_tokens']} "
