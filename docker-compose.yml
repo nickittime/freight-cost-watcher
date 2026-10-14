@@ -1,0 +1,13 @@
+services:
+  freight-cost-watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: freight_cost_watcher
+    environment:
+      - LLM_PROVIDER=fake
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./outputs:/app/outputs
+      - ./data:/app/data:ro
+    command: ["--no-cache"]

@@ -1,0 +1,12 @@
+pandas>=2.1
+numpy>=1.26
+pydantic>=2.5
+pydantic-settings>=2.1
+chromadb>=0.5
+groq>=0.9
+google-genai>=1.0
+
+[dev]
+pytest>=8
+pytest-cov>=5
+ruff>=0.5

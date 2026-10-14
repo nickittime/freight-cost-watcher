@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: freight-cost-watcher
+Version: 1.0.0
+Summary: Grounded shipping-cost anomaly detection with RAG verification.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=2.1
+Requires-Dist: numpy>=1.26
+Requires-Dist: pydantic>=2.5
+Requires-Dist: pydantic-settings>=2.1
+Requires-Dist: chromadb>=0.5
+Requires-Dist: groq>=0.9
+Requires-Dist: google-genai>=1.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: pytest-cov>=5; extra == "dev"
+Requires-Dist: ruff>=0.5; extra == "dev"
