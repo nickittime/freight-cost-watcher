@@ -1,0 +1,34 @@
+{
+  "gold_set_size": 22,
+  "candidate_count_detected": 22,
+  "verdict_accuracy": 1.0,
+  "citation_accuracy": 1.0,
+  "mismatches": [],
+  "counterfactual_suite_passed": true,
+  "counterfactuals": [
+    {
+      "name": "all_routes_peer_divergence_trap_N003",
+      "passed": true,
+      "output_flagged": "Yes",
+      "reason": "Overridden: nationwide note N003 ('All Routes') affects peer routes equally and cannot explain a +20.6% divergence vs similar-length routes. Flagged as unexplained for human review."
+    },
+    {
+      "name": "route_specific_null_end_date_7_weeks_later_N002",
+      "passed": true,
+      "output_flagged": "Yes",
+      "reason": "Overridden: week 2025-03-10 falls outside the effective window of note N002. Flagged as unexplained for human review."
+    },
+    {
+      "name": "post_flood_window_lingering_spike_N001",
+      "passed": true,
+      "output_flagged": "Yes",
+      "reason": "Overridden: week 2025-03-10 falls outside the effective window of note N001. Flagged as unexplained for human review."
+    },
+    {
+      "name": "magnitude_ceiling_exceeded_Mumbai_Delhi_N003",
+      "passed": true,
+      "output_flagged": "Yes",
+      "reason": "Overridden: observed cost rise (+11.6%) significantly exceeds the impact described in note N003 (up to 7.0%). Flagged as unexplained for human review."
+    }
+  ]
+}

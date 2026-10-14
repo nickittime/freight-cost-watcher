@@ -1,0 +1,13 @@
+FREIGHT COST WATCHER - 3-RUN REPRODUCIBILITY VERIFICATION REPORT
+=================================================================
+Provider / Model : groq / openai/gpt-oss-120b
+Pass 1 SHA-256   : a270832e6297ee0acff59dd3e1fe0c13c3c59c07b8e624424d45e6ef21caaad9
+Pass 2 SHA-256   : a270832e6297ee0acff59dd3e1fe0c13c3c59c07b8e624424d45e6ef21caaad9
+Pass 3 SHA-256   : a270832e6297ee0acff59dd3e1fe0c13c3c59c07b8e624424d45e6ef21caaad9
+
+VERIFICATION STATUS: 100% BIT-STABLE AND IDENTICAL ACROSS 3 SUBPROCESSES
+- Graded fields (route, week_of, cost_per_tonne_km, vs_own_history, vs_similar_routes, flagged, matched_note_id): IDENTICAL
+- Reason text identical across all 3 runs: True
+- Full CSV SHA-256 hashes identical across all 3 runs: True
+- Total candidate anomalies in output: 22
+=================================================================

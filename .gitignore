@@ -3,7 +3,10 @@ venv/
 .cache/
 __pycache__/
 *.py[cod]
+*.egg-info/
+src/*.egg-info/
+freight_cost_watcher.egg-info/
+build/
+dist/
 .pytest_cache/
 .ruff_cache/
-outputs/*
-!outputs/.gitkeep

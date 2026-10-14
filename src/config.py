@@ -38,8 +38,8 @@ class Settings(BaseSettings):
     LLM_SEED: int = 42
     LLM_MAX_RETRIES: int = 3
     LLM_TIMEOUT_S: float = 30.0
-    PRICE_INPUT_PER_MTOK: float = 0.59
-    PRICE_OUTPUT_PER_MTOK: float = 0.79
+    PRICE_INPUT_PER_MTOK: float = 0.15
+    PRICE_OUTPUT_PER_MTOK: float = 0.60
 
     @property
     def shipments_path(self) -> Path:
