@@ -202,12 +202,3 @@ Asynchronous Batched Verification: Utilizing asynchronous client pools for proce
 
 
 ---
-
-### Step 2: Push to GitHub
-
-Once saved in Notepad, stage, commit, and push:
-
-```cmd
-git add README.md
-git commit -m "docs: finalize README with escaped LaTeX underscores and formatted markdown tables"
-git push origin main
