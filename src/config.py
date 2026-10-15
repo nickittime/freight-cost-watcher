@@ -31,9 +31,9 @@ class Settings(BaseSettings):
 
     LLM_PROVIDER: Literal["groq", "gemini", "stub"] = "groq"
     GROQ_API_KEY: SecretStr | None = None
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     GEMINI_API_KEY: SecretStr | None = None
-    GEMINI_MODEL: str = "gemini-3.8-flash"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     LLM_TEMPERATURE: float = 0.0
     LLM_SEED: int = 42
     LLM_MAX_RETRIES: int = 3

@@ -1,9 +1,9 @@
-from datetime import datetime
 import json
+from datetime import datetime
 
 from src.config import get_settings
 from src.exceptions import FreightWatcherError
-from src.guardrails import verify_verdict_guardrails
+from src.guardrails import diagnose_note_failure, verify_verdict_guardrails
 from src.llm.client import BaseLLMClient
 from src.logger import get_logger
 from src.rag.vector_store import NoteVectorStore
@@ -32,56 +32,60 @@ def build_deterministic_reason(
     m: RouteWeekMetrics,
     final_verdict: str,
     verified_note_id: str | None,
+    raw_verdict: str,
+    raw_note_id: str | None,
+    guardrail_override_reason: str | None,
+    retrieved_notes: list[EnrichedContextNote],
     enriched_notes: dict[str, EnrichedContextNote],
 ) -> str:
     """
-    Constructs a deterministic, non-contradictory explanation from verified structured fields.
-    - If justified: cites the verified note and date.
-    - If unexplained: explains why no disruption note explains this specific route-week,
-      guaranteeing bit-stable CSV reproducibility across independent runs.
+    Constructs an explanation entirely from verified structured fields and retrieval diagnostics.
+    Guaranteed: Contains ZERO hard-coded route or week string literals.
     """
     if final_verdict == "justified" and verified_note_id:
         note = enriched_notes[verified_note_id]
+        own_str = f"+{m.vs_own_pct:.1f}%" if m.vs_own_pct is not None else "cost"
         return (
-            f"Matches note {note.note_id} dated {note.note_date}: {note.note} "
-            "The cost rise is explained by this verified disruption."
+            f"Matches verified note {note.note_id} dated {note.note_date}: {note.note} "
+            f"Corridor disruption explains the {own_str} rate increase."
         )
 
-    # Specific corridor-level deterministic explanations for unexplained candidates
-    if m.route == "Chennai-Bangalore" and m.week_of in ("2025-03-10", "2025-03-17"):
+    week_monday = datetime.strptime(m.week_of, "%Y-%m-%d").date()
+    settings = get_settings()
+
+    # Filter in-scope notes ranked by date proximity
+    in_scope_notes = [
+        n for n in retrieved_notes if n.applies_to in (m.route, "All Routes")
+    ]
+    in_scope_notes.sort(key=lambda n: abs((week_monday - n.note_date).days))
+
+    rejection_details: list[str] = []
+    for note in in_scope_notes[:2]:  # Top-2 closest in-scope notes
+        diag = diagnose_note_failure(
+            note=note,
+            route=m.route,
+            week_monday=week_monday,
+            vs_own_pct=m.vs_own_pct,
+            vs_peer_pct=m.vs_peer_pct,
+            max_weeks_open_ended=settings.MAX_WEEKS_OPEN_ENDED_EFFECT,
+            magnitude_tolerance_pct=settings.MAGNITUDE_TOLERANCE_PCT,
+            max_all_routes_peer_gap_pct=settings.ALL_ROUTES_MAX_PEER_GAP_PCT,
+        )
+        if diag:
+            rejection_details.append(f"{note.note_id} ({note.note_date}): {diag}")
+
+    override_prefix = ""
+    if raw_verdict == "justified" and raw_note_id and guardrail_override_reason:
+        override_prefix = f"{guardrail_override_reason} "
+
+    if rejection_details:
+        diag_summary = "; ".join(rejection_details)
         return (
-            "Note N001 confirms flooding ended by Mar 8 and roads were passable by Mar 9, "
-            "while N009 confirms returned conditions. Lingering cost rise is unexplained and flagged for review."
+            f"{override_prefix}No valid context note justifies this cost rise. "
+            f"In-scope notes evaluated: {diag_summary}. Flagged for review."
         )
 
-    if m.route == "Mumbai-Delhi" and m.week_of == "2025-05-12":
-        return (
-            "The closest note (N003, diesel +5-7%) cannot explain this spike because the observed "
-            f"cost rise (+{m.vs_own_pct:.1f}%) exceeds the stated nationwide impact (+7.0% max, +tol 10.0%). "
-            "Flagged as unexplained for human review."
-        )
-
-    if m.route == "Mumbai-Pune":
-        if m.week_of == "2025-06-23":
-            return (
-                "Nationwide note N003 ('All Routes') affects peer routes equally and cannot explain "
-                f"a +{m.vs_peer_pct:.1f}% divergence vs similar-length routes. Flagged as unexplained for review."
-            )
-        return (
-            "No corridor-specific disruption note explains this sustained cost rise (N006 reports stable "
-            "conditions, N010 costs absorbed). Flagged as unexplained for human review."
-        )
-
-    if m.route == "Delhi-Jaipur":
-        return (
-            f"No matching disruption note found for Delhi-Jaipur around week {m.week_of}. "
-            "Cost rise looks unexplained and is worth a human review."
-        )
-
-    return (
-        f"No matching disruption note found for {m.route} around week {m.week_of}. "
-        "Cost rise looks unexplained and is worth a human review."
-    )
+    return f"{override_prefix}No in-scope disruption notes found for this corridor and date window. Flagged for review."
 
 
 class AnomalyVerifier:
@@ -143,7 +147,7 @@ Retrieved Context Notes (sorted by date proximity):
             raw_verdict = "unexplained"
             raw_note_id = None
 
-        final_verdict, verified_note_id, _guardrail_reason = verify_verdict_guardrails(
+        final_verdict, verified_note_id, guardrail_reason = verify_verdict_guardrails(
             route=m.route,
             week_of=m.week_of,
             vs_own_pct=m.vs_own_pct,
@@ -157,11 +161,18 @@ Retrieved Context Notes (sorted by date proximity):
             max_all_routes_peer_gap_pct=settings.ALL_ROUTES_MAX_PEER_GAP_PCT,
         )
 
+        gate_overridden = bool(raw_verdict == "justified" and final_verdict == "unexplained")
+        override_msg = guardrail_reason if gate_overridden else None
+
         flagged_status = "No (justified)" if final_verdict == "justified" else "Yes"
         final_reason = build_deterministic_reason(
             m=m,
             final_verdict=final_verdict,
             verified_note_id=verified_note_id,
+            raw_verdict=raw_verdict,
+            raw_note_id=raw_note_id,
+            guardrail_override_reason=override_msg,
+            retrieved_notes=retrieved_notes,
             enriched_notes=self.enriched_notes,
         )
 
@@ -174,4 +185,8 @@ Retrieved Context Notes (sorted by date proximity):
             flagged=flagged_status,
             matched_note_id=verified_note_id,
             reason=final_reason,
+            raw_llm_verdict=raw_verdict,
+            raw_llm_matched_note_id=raw_note_id,
+            gate_overridden=gate_overridden,
+            override_reason=override_msg,
         )

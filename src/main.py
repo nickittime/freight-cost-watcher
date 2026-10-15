@@ -93,10 +93,22 @@ def run_pipeline(
             }
             full_records.append(norm_dict)
 
+    # Export Full 728-Week Breakdown for Reviewers
     df_full = pd.DataFrame(full_records).sort_values(["week_of", "route"]).reset_index(drop=True)
     full_path = settings.OUTPUT_DIR / "full_weekly_analysis.csv"
     df_full.to_csv(full_path, index=False)
     logger.info("Saved complete 728-week breakdown to %s", full_path)
+
+    # Export Audit Log Tracking LLM Raw Verdicts vs Gate Overrides
+    audit_records = [r.to_audit_dict() for r in flagged_rows]
+    df_audit = pd.DataFrame(audit_records).sort_values(["week_of", "route"]).reset_index(drop=True)
+    audit_path = settings.OUTPUT_DIR / "llm_audit.csv"
+    df_audit.to_csv(audit_path, index=False)
+    logger.info("Saved LLM audit file to %s (%d candidate rows)", audit_path, len(df_audit))
+
+    # Export Token Usage & Published USD Cost
+    token_log_path = settings.OUTPUT_DIR / "token_cost_log.json"
+    tracker.save_log(token_log_path)
 
     token_log_path = settings.OUTPUT_DIR / "token_cost_log.json"
     tracker.save_log(token_log_path)
@@ -153,6 +165,8 @@ def main() -> None:
         print(f"User Query: {args.ask}")
         answer = agent.ask(args.ask)
         print(f"\nAssistant Answer:\n{answer}\n")
+	
+
 
 
 if __name__ == "__main__":

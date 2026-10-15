@@ -25,7 +25,7 @@ class BaseLLMClient(ABC):
 
 
 class GroqClient(BaseLLMClient):
-    """Groq client using llama-3.3-70b-versatile with temp=0 and seed=42."""
+    """Groq client with temp=0, seed=42, rate pacing, and automated quota failover."""
 
     def __init__(self, tracker: TokenCostTracker) -> None:
         super().__init__(tracker)
@@ -34,8 +34,19 @@ class GroqClient(BaseLLMClient):
             raise LLMProviderError("Missing GROQ_API_KEY")
         from groq import Groq
 
-        self.client = Groq(api_key=settings.GROQ_API_KEY.get_secret_value())
-        self.model = settings.GROQ_MODEL
+        clean_key = (
+            settings.GROQ_API_KEY.get_secret_value()
+            .strip()
+            .strip("'\"")
+        )
+        self.client = Groq(api_key=clean_key)
+        self.primary_model = settings.GROQ_MODEL
+        # Sibling model on the same account with an independent quota
+        self.fallback_model = (
+            "openai/gpt-oss-20b"
+            if "120b" in settings.GROQ_MODEL
+            else "openai/gpt-oss-120b"
+        )
         self.temperature = settings.LLM_TEMPERATURE
         self.seed = settings.LLM_SEED
         self.max_retries = settings.LLM_MAX_RETRIES
@@ -44,41 +55,64 @@ class GroqClient(BaseLLMClient):
     def complete_json(
         self, system_prompt: str, user_prompt: str, context: str = ""
     ) -> dict:
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=self.temperature,
-                    seed=self.seed,
-                    response_format={"type": "json_object"},
-                    timeout=self.timeout,
-                )
-                usage = response.usage
-                p_tok = usage.prompt_tokens if usage else 0
-                c_tok = usage.completion_tokens if usage else 0
-                self.tracker.record_call(
-                    p_tok, c_tok, self.model, context, provider="groq"
-                )
+        time.sleep(0.5)  # Pacing delay to stay within RPM/TPM thresholds
 
-                content = response.choices[0].message.content or "{}"
-                return json.loads(content)
-            except Exception as e:
-                err_str = str(e)
-                logger.warning(
-                    "Groq attempt %d/%d failed: %s", attempt, self.max_retries, err_str
-                )
-                if attempt == self.max_retries:
-                    raise LLMProviderError(
-                        f"Groq API call failed after {self.max_retries} attempts: {e}"
-                    ) from e
-                wait_s = 15.0 if "429" in err_str else float(2**attempt)
-                time.sleep(wait_s)
-        raise LLMProviderError("Groq call failed unexpectedly")
+        models_to_attempt = [self.primary_model, self.fallback_model]
 
+        for model in models_to_attempt:
+            for attempt in range(1, self.max_retries + 1):
+                try:
+                    response = self.client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=self.temperature,
+                        seed=self.seed,
+                        response_format={"type": "json_object"},
+                        timeout=self.timeout,
+                    )
+                    usage = response.usage
+                    p_tok = usage.prompt_tokens if usage else 0
+                    c_tok = usage.completion_tokens if usage else 0
+                    self.tracker.record_call(
+                        p_tok, c_tok, model, context, provider="groq"
+                    )
+
+                    content = response.choices[0].message.content or "{}"
+                    return json.loads(content)
+
+                except Exception as e:
+                    err_str = str(e)
+                    is_daily_limit = "tokens per day" in err_str.lower() or "tpd" in err_str.lower()
+
+                    if is_daily_limit and model != self.fallback_model:
+                        logger.warning(
+                            "Daily token quota (TPD) reached for %s. Automatically failing over to %s.",
+                            model,
+                            self.fallback_model,
+                        )
+                        break  # Immediately break to fallback model
+
+                    logger.warning(
+                        "Groq attempt %d/%d on %s failed: %s",
+                        attempt,
+                        self.max_retries,
+                        model,
+                        err_str,
+                    )
+
+                    if attempt == self.max_retries and model == self.fallback_model:
+                        raise LLMProviderError(
+                            f"Groq API call failed across primary and fallback models: {e}"
+                        ) from e
+
+                    # Exponential backoff on transient errors
+                    wait_s = 5.0 if "429" in err_str else float(2**attempt)
+                    time.sleep(wait_s)
+
+        raise LLMProviderError("All Groq model completion attempts failed.")
 
 class GeminiClient(BaseLLMClient):
     """Google Gemini client with rate-limit-aware retry backoff and temp=0."""

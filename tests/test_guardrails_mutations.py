@@ -151,3 +151,60 @@ def test_citation_consistency_output_contract():
     assert unexplained["flagged"] == "Yes"
     assert unexplained["matched_note_id"] == ""
     assert "Verdict: Unexplained" in unexplained["reason"]
+
+
+def test_mutation_all_routes_note_rejected_when_peer_gap_is_large():
+    """Nationwide note N003 ('All Routes') cannot explain a +20.6% divergence vs peers."""
+    fuel_note = EnrichedContextNote(
+        note_id="N003",
+        note_date=date(2025, 5, 5),
+        applies_to="All Routes",
+        note="Diesel prices rose nationwide starting this week, pushing up costs by 5-7%.",
+        effective_start_date=date(2025, 5, 5),
+        effective_end_date=None,
+        cost_effect="increase",
+        stated_magnitude_min_pct=5.0,
+        stated_magnitude_max_pct=7.0,
+    )
+    verdict, note_id, reason = verify_verdict_guardrails(
+        route="Mumbai-Pune",
+        week_of="2025-06-23",
+        vs_own_pct=6.2,
+        candidate_cptk=3.76,
+        llm_verdict="justified",
+        matched_note_id="N003",
+        notes_by_id={"N003": fuel_note},
+        vs_peer_pct=20.6,
+        max_all_routes_peer_gap_pct=10.0,
+    )
+    assert verdict == "unexplained"
+    assert note_id is None
+    assert "cannot explain a +20.6% divergence" in reason
+
+
+def test_mutation_route_specific_null_end_date_defaults_to_one_week():
+    """If N002 has effective_end_date=None, it only covers 1 week, not 7 weeks later."""
+    n002_open = EnrichedContextNote(
+        note_id="N002",
+        note_date=date(2025, 1, 20),
+        applies_to="Ahmedabad-Mumbai",
+        note="Temporary festival surcharge on Ahmedabad-Mumbai.",
+        effective_start_date=date(2025, 1, 20),
+        effective_end_date=None,
+        cost_effect="increase",
+        stated_magnitude_min_pct=0.0,
+        stated_magnitude_max_pct=100.0,
+    )
+    verdict, note_id, reason = verify_verdict_guardrails(
+        route="Ahmedabad-Mumbai",
+        week_of="2025-03-10",
+        vs_own_pct=20.0,
+        candidate_cptk=3.20,
+        llm_verdict="justified",
+        matched_note_id="N002",
+        notes_by_id={"N002": n002_open},
+        vs_peer_pct=22.0,
+    )
+    assert verdict == "unexplained"
+    assert note_id is None
+    assert "falls outside the effective window" in reason

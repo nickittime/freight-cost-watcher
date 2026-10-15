@@ -20,8 +20,6 @@ distro==1.9.0
 durationpy==0.11
 filelock==4.1.1
 flatbuffers==25.12.19
-# Editable Git install with no remote (freight-cost-watcher==1.0.0)
--e c:\users\singh\desktop\intern project\freighttiger\project
 frozenlist==1.8.0
 fsspec==2026.9.0
 google-auth==2.62.0
@@ -51,9 +49,6 @@ numpy==2.4.6
 oauthlib==4.0.0
 onnxruntime==1.31.0
 opentelemetry-api==1.45.1
-opentelemetry-exporter-otlp-common==0.66b1
-opentelemetry-exporter-otlp-proto-common==1.45.1
-opentelemetry-exporter-otlp-proto-grpc==1.45.1
 opentelemetry-proto==1.45.1
 opentelemetry-sdk==1.45.1
 opentelemetry-semantic-conventions==0.66b1

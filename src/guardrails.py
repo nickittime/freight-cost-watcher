@@ -1,3 +1,4 @@
+# src/guardrails.py
 from datetime import date, datetime, timedelta
 
 from src.logger import get_logger
@@ -13,12 +14,7 @@ def is_week_overlapping_note(
     applies_to: str = "All Routes",
     max_weeks_open_ended: int = 8,
 ) -> bool:
-    """
-    Returns True if the Monday-to-Sunday week overlaps the note's effective window.
-    - Explicit end_date: overlaps [start_date, end_date].
-    - Route-specific note with end_date=None: bounded to 1 week [start_date, start_date + 6 days].
-    - 'All Routes' note with end_date=None: bounded to max_weeks_open_ended weeks.
-    """
+    """Returns True if the Monday-to-Sunday week overlaps the note's effective window."""
     week_sunday = week_monday + timedelta(days=6)
     if end_date is not None:
         effective_end = end_date
@@ -27,6 +23,71 @@ def is_week_overlapping_note(
     else:
         effective_end = start_date + timedelta(weeks=max_weeks_open_ended)
     return max(week_monday, start_date) <= min(week_sunday, effective_end)
+
+
+def diagnose_note_failure(
+    note: EnrichedContextNote,
+    route: str,
+    week_monday: date,
+    vs_own_pct: float | None,
+    vs_peer_pct: float | None,
+    max_weeks_open_ended: int = 8,
+    magnitude_tolerance_pct: float = 3.0,
+    max_all_routes_peer_gap_pct: float = 10.0,
+) -> str | None:
+    """
+    Returns None if the note genuinely justifies this corridor and week.
+    Otherwise returns a diagnostic reason string. Contains zero hard-coded route or date literals.
+    """
+    # 1. Scope check
+    if note.applies_to != "All Routes" and note.applies_to != route:
+        return f"applies to {note.applies_to}, but this route is {route}"
+
+    # 2. Causal cost effect check
+    if note.cost_effect != "increase":
+        return f"describes '{note.cost_effect}' in costs, which cannot justify an increase"
+
+    # 3. Temporal overlap check
+    week_sunday = week_monday + timedelta(days=6)
+    if note.effective_end_date is not None:
+        effective_end = note.effective_end_date
+    elif note.applies_to != "All Routes":
+        effective_end = note.effective_start_date + timedelta(days=6)
+    else:
+        effective_end = note.effective_start_date + timedelta(weeks=max_weeks_open_ended)
+
+    if not (max(week_monday, note.effective_start_date) <= min(week_sunday, effective_end)):
+        if week_monday > effective_end:
+            return (
+                f"falls outside the effective window (effective window closed on {effective_end} "
+                f"prior to week {week_monday})"
+            )
+        return (
+            f"falls outside the effective window (effective window begins on {note.effective_start_date} "
+            f"after week {week_monday})"
+        )
+
+    # 4. Nationwide peer gap check
+    if (
+        note.applies_to == "All Routes"
+        and vs_peer_pct is not None
+        and vs_peer_pct > max_all_routes_peer_gap_pct
+    ):
+        return (
+            f"nationwide note ('All Routes') affects peer routes equally and cannot explain "
+            f"a +{vs_peer_pct:.1f}% divergence vs similar-length peers"
+        )
+
+    # 5. Stated magnitude check
+    if note.stated_magnitude_max_pct > 0.0 and vs_own_pct is not None:
+        max_allowed = note.stated_magnitude_max_pct + magnitude_tolerance_pct
+        if vs_own_pct > max_allowed:
+            return (
+                f"observed cost rise (+{vs_own_pct:.1f}%) significantly exceeds stated impact "
+                f"(+{note.stated_magnitude_max_pct:.1f}%, ceiling +{max_allowed:.1f}%)"
+            )
+
+    return None
 
 
 def verify_verdict_guardrails(
@@ -43,113 +104,31 @@ def verify_verdict_guardrails(
     max_all_routes_peer_gap_pct: float = 10.0,
 ) -> tuple[str, str | None, str]:
     """
-    Pure deterministic validation gate.
-
-    Returns:
-        (final_verdict, final_matched_note_id, deterministic_reason)
+    Validates proposed LLM justification against diagnostic guardrail checks.
+    Returns (final_verdict, verified_note_id, guardrail_reason).
     """
     if llm_verdict != "justified" or not matched_note_id:
-        return (
-            "unexplained",
-            None,
-            "No matching disruption note justifies this cost rise; flagged for human review.",
-        )
+        return "unexplained", None, "No note cited by LLM."
 
-    note_id = matched_note_id.strip().upper()
-    if note_id not in notes_by_id:
-        logger.warning("Guardrail rejected non-existent note citation: %s", note_id)
-        return (
-            "unexplained",
-            None,
-            f"Overridden: cited note '{note_id}' does not exist in dataset.",
-        )
+    nid = matched_note_id.strip().upper()
+    if nid not in notes_by_id:
+        return "unexplained", None, f"Overridden: cited note '{nid}' does not exist in dataset."
 
-    note = notes_by_id[note_id]
-
-    # 1. Route Scope Check
-    if note.applies_to != "All Routes" and note.applies_to != route:
-        logger.warning(
-            "Guardrail rejected route mismatch: %s applies to %s, not %s",
-            note_id,
-            note.applies_to,
-            route,
-        )
-        return (
-            "unexplained",
-            None,
-            f"Overridden: note {note_id} applies to {note.applies_to}, but this route is {route}.",
-        )
-
-    # 2. Temporal Overlap Check
+    note = notes_by_id[nid]
     monday = datetime.strptime(week_of, "%Y-%m-%d").date()
-    if not is_week_overlapping_note(
-        monday,
-        note.effective_start_date,
-        note.effective_end_date,
-        applies_to=note.applies_to,
+    failure_diag = diagnose_note_failure(
+        note=note,
+        route=route,
+        week_monday=monday,
+        vs_own_pct=vs_own_pct,
+        vs_peer_pct=vs_peer_pct,
         max_weeks_open_ended=max_weeks_open_ended,
-    ):
-        logger.warning(
-            "Guardrail rejected temporal window mismatch for %s on week %s",
-            note_id,
-            week_of,
-        )
-        return (
-            "unexplained",
-            None,
-            f"Overridden: week {week_of} falls outside the effective window of note {note_id}.",
-        )
-
-    # 3. Cost Effect Check
-    if note.cost_effect != "increase":
-        logger.warning(
-            "Guardrail rejected non-increasing note %s (effect: %s)",
-            note_id,
-            note.cost_effect,
-        )
-        msg = (
-            f"Overridden: note {note_id} describes '{note.cost_effect}' in costs, "
-            "which cannot justify an increase."
-        )
-        return ("unexplained", None, msg)
-
-    # 4. Nationwide ('All Routes') Peer Divergence Check
-    if (
-        note.applies_to == "All Routes"
-        and vs_peer_pct is not None
-        and vs_peer_pct > max_all_routes_peer_gap_pct
-    ):
-        logger.warning(
-            "Guardrail rejected All Routes note %s for large peer gap (+%.1f%% > +%.1f%%)",
-            note_id,
-            vs_peer_pct,
-            max_all_routes_peer_gap_pct,
-        )
-        msg = (
-            f"Overridden: nationwide note {note_id} ('All Routes') affects peer routes equally "
-            f"and cannot explain a +{vs_peer_pct:.1f}% divergence vs similar-length routes."
-        )
-        return ("unexplained", None, msg)
-
-    # 5. Magnitude Check
-    if note.stated_magnitude_max_pct > 0.0 and vs_own_pct is not None:
-        max_allowed = note.stated_magnitude_max_pct + magnitude_tolerance_pct
-        if vs_own_pct > max_allowed:
-            logger.warning(
-                "Guardrail rejected magnitude discrepancy: observed +%.1f%% exceeds "
-                "stated +%.1f%% (+tol %.1f%%)",
-                vs_own_pct,
-                note.stated_magnitude_max_pct,
-                max_allowed,
-            )
-            msg = (
-                f"Overridden: observed cost rise (+{vs_own_pct:.1f}%) significantly exceeds the "
-                f"impact described in note {note_id} (up to {note.stated_magnitude_max_pct:.1f}%)."
-            )
-            return ("unexplained", None, msg)
-
-    return (
-        "justified",
-        note_id,
-        f"Matches note {note_id} dated {note.note_date}: {note.note}",
+        magnitude_tolerance_pct=magnitude_tolerance_pct,
+        max_all_routes_peer_gap_pct=max_all_routes_peer_gap_pct,
     )
+
+    if failure_diag is not None:
+        logger.warning("Guardrail rejected note %s on %s %s: %s", nid, route, week_of, failure_diag)
+        return "unexplained", None, f"Overridden: note {nid} {failure_diag}."
+
+    return "justified", nid, f"Matches verified note {nid}."
