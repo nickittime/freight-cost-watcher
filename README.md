@@ -6,59 +6,60 @@ A production-grade, reproducible AI decision system that monitors weekly road fr
 
 ## 1. System Architecture
 
-                           +-----------------------------+
-                           |    shipment_records.csv     |
-                           |    (2,940 raw shipments)    |
-                           +--------------+--------------+
-                                          |
-                                          v
-                          +-------------------------------+
-                          |    Stage 1: Validation &      |
-                          |   Ratio-of-Sums Aggregation   |
-                          |  (7 routes x 104 Mondays =    |
-                          |       728 route-weeks)        |
-                          +---------------+---------------+
-                                          |
-                                          v
-                          +-------------------------------+
-                          |   Stage 2: Baseline Engine    |
-                          | - Own History: O(8) deque     |
-                          |   (calendar 56-day rolling)   |
-                          | - Peer LOO: O(1) route_type   |
-                          +---------------+---------------+
-                                          |
-                                          v
-                          +-------------------------------+
-                          | Stage 3: Anomaly Gate         |
-                          | - Acute Spike (>=10%)         |
-                          | - Hysteresis Creep (20%->15%) |
-                          | -> 22 Candidates (97% pruned) |
-                          +---------------+---------------+
-                                          | (Candidate Pool)
+```
+                               +-----------------------------+
+                               |    shipment_records.csv     |
+                               |    (2,940 raw shipments)    |
+                               +--------------+--------------+
+                                              |
+                                              v
+                              +-------------------------------+
+                              |    Stage 1: Validation &      |
+                              |   Ratio-of-Sums Aggregation   |
+                              |  (7 routes x 104 Mondays =    |
+                              |       728 route-weeks)        |
+                              +---------------+---------------+
+                                              |
+                                              v
+                              +-------------------------------+
+                              |   Stage 2: Baseline Engine    |
+                              | - Own History: O(8) deque     |
+                              |   (calendar 56-day rolling)   |
+                              | - Peer LOO: O(1) route_type   |
+                              +---------------+---------------+
+                                              |
+                                              v
+                              +-------------------------------+
+                              | Stage 3: Anomaly Gate         |
+                              | - Acute Spike (>=10%)         |
+                              | - Hysteresis Creep (20%->15%) |
+                              | -> 22 Candidates (97% pruned) |
+                              +---------------+---------------+
+                                              | (Candidate Pool)
 +-----------------------+                     v
 |   context_notes.csv   |        +----------------------------+
 |  (10 real-world notes)|        | Stage 4: Grounded Verifier |
 +-----------+-----------+        | - ChromaDB RAG (Top-5)     |
-|                    | - Groq gpt-oss-20b (T=0)   |
-v                    +--------------+-------------+
+            |                    | - Groq gpt-oss-20b (T=0)   |
+            v                    +--------------+-------------+
 +-----------------------+                       |
 | One-Time Note Indexer |                       v
 | & Structured Metadata |        +----------------------------+
 | (Scope, Window, Mag)  |------->| Stage 5: Deterministic     |
 +-----------------------+        | Guardrail Gate             |
-| (Route, Window, Magnitude, |
-|  Nationwide Peer Gap)      |
-+--------------+-------------+
-|
-+--------------------------------+--------------------------------+
-|                                |                                |
-v                                v                                v
-+-------------------------+      +-------------------------+      +-------------------------+
-| outputs/                |      | outputs/                |      | Stretch Goal:           |
-| flagged_output.csv      |      | token_cost_log.json     |      | Interactive CLI Agent   |
-| (Submission Contract)   |      | (Tokens & Published USD)|      | (Dynamic Tool Use)      |
-+-------------------------+      +-------------------------+      +-------------------------+
-
+                                 | (Route, Window, Magnitude, |
+                                 |  Nationwide Peer Gap)      |
+                                 +--------------+-------------+
+                                                |
+               +--------------------------------+--------------------------------+
+               |                                |                                |
+               v                                v                                v
+  +-------------------------+      +-------------------------+      +-------------------------+
+  | outputs/                |      | outputs/                |      | Stretch Goal:           |
+  | flagged_output.csv      |      | token_cost_log.json     |      | Interactive CLI Agent   |
+  | (Submission Contract)   |      | (Tokens & Published USD)|      | (Dynamic Tool Use)      |
+  +-------------------------+      +-------------------------+      +-------------------------+
+```
 
 ---
 
@@ -67,7 +68,7 @@ v                                v                                v
 ### 2.1 Group-Level Ratio-of-Sums
 Corridor freight economics cannot be calculated as the average of individual shipment cost ratios, as that gives disproportionate mathematical weight to lightweight shipments. Weekly unit cost per tonne-km is calculated strictly at the group level as the ratio of sums:
 
-$$\text{cost\_per\_tonne\_km}_{r, w} = \frac{\sum_{i \in (r, w)} \text{freight\_cost\_inr}_i}{\sum_{i \in (r, w)} (\text{quantity\_tonnes}_i \times \text{distance\_km}_i)}$$
+$$\text{cost per tonne-km}_{r, w} = \frac{\sum_{i \in (r, w)} \text{Freight Cost}_i}{\sum_{i \in (r, w)} (\text{Quantity}_i \times \text{Distance}_i)}$$
 
 ### 2.2 Own-History Trailing Baseline (Zero Look-Ahead)
 - Enforces an $O(\text{window}) = O(8)$ calendar-bounded rolling deque per corridor over strictly prior Mondays (maximum 56 calendar days).
@@ -77,7 +78,7 @@ $$\text{cost\_per\_tonne\_km}_{r, w} = \frac{\sum_{i \in (r, w)} \text{freight\_
 ### 2.3 Peer Corridor Baseline (Leave-One-Out)
 For each week and corridor distance category (`Short`, `Medium`, `Long`), the peer baseline excludes the corridor itself to avoid self-influence:
 
-$$\text{peer\_baseline}_{r, w} = \frac{\sum_{j \in \text{type}(r)} \text{cptk}_{j, w} - \text{cptk}_{r, w}}{N_{\text{type}(r)} - 1}$$
+$$\text{peer baseline}_{r, w} = \frac{\sum_{j \in \text{type}(r)} \text{CPTK}_{j, w} - \text{CPTK}_{r, w}}{N_{\text{type}(r)} - 1}$$
 
 Computed in constant $O(1)$ time per row from bucket aggregates.
 
@@ -147,8 +148,10 @@ python -m venv venv
 pip install -e ".[dev]"
 copy .env.example .env
 # Set GROQ_API_KEY in .env
-6.2 Execution Commands
-Bash
+```
+
+### 6.2 Execution Commands
+```bash
 # 1. Run unit test suite (39 tests, offline)
 python -m pytest
 
@@ -163,42 +166,33 @@ python -m src.main --no-cache
 
 # 5. Interactive tool-calling agent CLI (Stretch Goal)
 python -m src.main --ask "Why did Chennai-Bangalore get pricier in February and March 2025?"
-6.3 Operational Token & Cost Accounting (outputs/token_cost_log.json)
+```
+
+### 6.3 Operational Token & Cost Accounting (`outputs/token_cost_log.json`)
 Pre-gating prunes 706 of 728 route-weeks (97.0%) prior to LLM verification.
 
-Provider / Model: groq / openai/gpt-oss-20b (temp=0.0, seed=42)
-
-Published Rates: $0.075 / 1M input tokens, $0.30 / 1M output tokens (checked October 2026)
-
-Total LLM Calls: 19 calls (19 unique requests, 0 retries)
-
-Input Tokens: 11,381 tokens ($0.000854 USD)
-
-Output Tokens: 9,230 tokens ($0.002769 USD)
-
-Total Tokens: 20,611
-
-Total Operational Cost: $0.003623 USD (approx. 0.36 cents)
-
-7. Assumptions, Tradeoffs & Future Work
-Assumptions
-Directional Corridors: Corridors are treated as directed pairs (Origin-Destination) because elevation profiles, toll structures, and backhaul demand differ by direction.
-
-Monday-Anchored Weeks: Weeks are identified by the Monday date (YYYY-MM-DD) of the shipment week.
-
-Conservative Review Policy: Candidate anomalies lacking unambiguous evidence degrade to Yes (Unexplained). Flagging an anomaly for human audit carries lower operational risk than a false justification.
-
-Design Tradeoffs
-Diagnostic Reason Synthesis vs. Free-Form Generation: Rather than passing raw LLM completion text into the final CSV, reason explanations are synthesized from verified diagnostic checks. This trades stylistic variation for guaranteed non-contradiction and bit-stable CSV reproducibility across runs.
-
-Hybrid Scope-Complete Retrieval vs. Pure Dense Search: Dense semantic search alone can miss short temporal notes. Our hybrid retriever guarantees the inclusion of all notes scoped to the corridor or "All Routes", ranked by temporal proximity.
-
-Future Work
-Dynamic Seasonal Indexing: Incorporating multi-year calendar awareness (e.g., regional festival shifts) into baseline calculations.
-
-Carrier Fixed-Effects Decomposition: Decomposing freight cost increases into transporter-specific rate changes versus corridor-wide inflation.
-
-Asynchronous Batched Verification: Utilizing asynchronous client pools for processing enterprise shipment datasets covering thousands of active corridors.
-
+- **Provider / Model**: `groq` / `openai/gpt-oss-20b` (temp=0.0, seed=42)
+- **Published Rates**: $0.075 / 1M input tokens, $0.30 / 1M output tokens (checked October 2026)
+- **Total LLM Calls**: 19 calls (19 unique requests, 0 retries)
+- **Input Tokens**: 11,381 tokens ($0.000854 USD)
+- **Output Tokens**: 9,230 tokens ($0.002769 USD)
+- **Total Tokens**: 20,611
+- **Total Operational Cost**: **$0.003623 USD (approx. 0.36 cents)**
 
 ---
+
+## 7. Assumptions, Tradeoffs & Future Work
+
+### Assumptions
+1. **Directional Corridors**: Corridors are treated as directed pairs (`Origin-Destination`) because elevation profiles, toll structures, and backhaul demand differ by direction.
+2. **Monday-Anchored Weeks**: Weeks are identified by the Monday date (`YYYY-MM-DD`) of the shipment week.
+3. **Conservative Review Policy**: Candidate anomalies lacking unambiguous evidence degrade to `Yes` (Unexplained). Flagging an anomaly for human audit carries lower operational risk than a false justification.
+
+### Design Tradeoffs
+1. **Diagnostic Reason Synthesis vs. Free-Form Generation**: Rather than passing raw LLM completion text into the final CSV, reason explanations are synthesized from verified diagnostic checks. This trades stylistic variation for guaranteed non-contradiction and bit-stable CSV reproducibility across runs.
+2. **Hybrid Scope-Complete Retrieval vs. Pure Dense Search**: Dense semantic search alone can miss short temporal notes. Our hybrid retriever guarantees the inclusion of all notes scoped to the corridor or `"All Routes"`, ranked by temporal proximity.
+
+### Future Work
+1. **Dynamic Seasonal Indexing**: Incorporating multi-year calendar awareness (e.g., regional festival shifts) into baseline calculations.
+2. **Carrier Fixed-Effects Decomposition**: Decomposing freight cost increases into transporter-specific rate changes versus corridor-wide inflation.
+3. **Asynchronous Batched Verification**: Utilizing asynchronous client pools for processing enterprise shipment datasets covering thousands of active corridors.
