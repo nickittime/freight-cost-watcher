@@ -1,0 +1,18 @@
+FREIGHT COST WATCHER - 3-RUN REPRODUCIBILITY VERIFICATION REPORT
+=================================================================
+Provider / Model : groq / openai/gpt-oss-120b
+Pass 1 SHA-256   : dfd05c28dc1fe65c3d122f2c347b3acc60b8f7b6b3b190292c9733662ff42023
+Pass 2 SHA-256   : dfd05c28dc1fe65c3d122f2c347b3acc60b8f7b6b3b190292c9733662ff42023
+Pass 3 SHA-256   : dfd05c28dc1fe65c3d122f2c347b3acc60b8f7b6b3b190292c9733662ff42023
+
+FINAL SUBMISSION CONTRACT VERIFICATION:
+- Graded fields (route, week_of, cost_per_tonne_km, vs_own_history, vs_similar_routes, flagged, matched_note_id): 100% IDENTICAL
+- Reason column: 100% IDENTICAL across all 3 passes
+- Full CSV SHA-256 hashes: 100% IDENTICAL across all 3 passes
+- Total candidate anomalies in output: 22
+
+LLM REASONING & GUARDRAIL AUDIT TELEMETRY (outputs/llm_audit.csv):
+- Raw LLM proposal consistency: 100.0% (22/22 candidates)
+- Deterministic gate overrides: Pass 1: 2, Pass 2: 2, Pass 3: 2
+- Raw LLM proposals were 100% identical across all runs.
+=================================================================

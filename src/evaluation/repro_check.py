@@ -1,5 +1,6 @@
 # src/evaluation/repro_check.py
 import hashlib
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -102,10 +103,23 @@ def run_3_pass_reproducibility_check() -> None:
                 f"Guarded verdict resolved deterministically to '{final_v}'"
             )
 
+    # 5. Read active provider and model dynamically from the generated token log
+    token_log_path = settings.OUTPUT_DIR / "token_cost_log.json"
+    active_provider = settings.LLM_PROVIDER
+    active_model = settings.GROQ_MODEL
+    if token_log_path.exists():
+        try:
+            with open(token_log_path, "r", encoding="utf-8") as f:
+                t_data = json.load(f)
+            active_model = t_data.get("summary", {}).get("model", active_model)
+            active_provider = t_data.get("summary", {}).get("provider", active_provider)
+        except Exception as e:
+            logger.warning("Could not read model from token log: %s", e)
+
     report_lines = [
         "FREIGHT COST WATCHER - 3-RUN REPRODUCIBILITY VERIFICATION REPORT",
         "=================================================================",
-        f"Provider / Model : {settings.LLM_PROVIDER} / {settings.GROQ_MODEL}",
+        f"Provider / Model : {active_provider} / {active_model}",
         f"Pass 1 SHA-256   : {hashes[0]}",
         f"Pass 2 SHA-256   : {hashes[1]}",
         f"Pass 3 SHA-256   : {hashes[2]}",

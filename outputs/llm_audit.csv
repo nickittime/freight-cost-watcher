@@ -4,7 +4,7 @@ Delhi-Jaipur,2024-11-18,4.09,unexplained,,Yes,,False,
 Ahmedabad-Mumbai,2025-01-20,3.29,justified,N002,No (justified),N002,False,
 Chennai-Bangalore,2025-02-24,3.58,justified,N001,No (justified),N001,False,
 Chennai-Bangalore,2025-03-03,3.48,justified,N001,No (justified),N001,False,
-Chennai-Bangalore,2025-03-10,3.57,justified,N009,Yes,,True,"Overridden: note N009 describes 'none' in costs, which cannot justify an increase."
+Chennai-Bangalore,2025-03-10,3.57,justified,N009,Yes,,True,"Overridden: note N009 reports no cost increase ('none'), which cannot justify an increase."
 Chennai-Bangalore,2025-03-17,3.47,unexplained,,Yes,,False,
 Mumbai-Delhi,2025-05-12,2.28,justified,N003,Yes,,True,"Overridden: note N003 observed cost rise (+11.6%) significantly exceeds stated impact (+7.0%, ceiling +10.0%)."
 Mumbai-Pune,2025-06-23,3.76,unexplained,,Yes,,False,

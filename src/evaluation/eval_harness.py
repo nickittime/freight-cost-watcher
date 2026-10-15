@@ -1,19 +1,33 @@
+
+
 import json
+from pathlib import Path
+
+import pandas as pd
 
 from src.config import get_settings
 from src.llm.client import BaseLLMClient
 from src.llm.cost_tracker import TokenCostTracker
 from src.logger import get_logger
-from src.main import run_pipeline
 from src.rag.vector_store import NoteVectorStore
 from src.rag.verifier import AnomalyVerifier
 from src.schemas import EnrichedContextNote, RouteWeekMetrics
 
 logger = get_logger(__name__)
 
-# Planted known disruption events derived from the shipment dataset
+# Planted benchmark events and their derivations:
+# 1-3: Operational disruptions from context_notes.csv:
+#      - N001: Chennai-Bangalore flood starting 2025-02-24
+#      - N001: Chennai-Bangalore flood continuation 2025-03-03
+#      - N002: Ahmedabad-Mumbai festival surcharge 2025-01-20
+# 4-8: Corridor events from shipment_records.csv:
+#      - Delhi-Jaipur 2024-11-11 & 2024-11-18: Acute unmitigated rate spike (+35.5% own, +21.0% peer)
+#      - Chennai-Bangalore 2025-03-10: Post-flood lingering rate rise after roads reopened (N009)
+#      - Mumbai-Delhi 2025-05-12: Excess rate spike exceeding nationwide diesel ceiling (+11.6% own)
+#      - Mumbai-Pune 2025-09-15 & 2025-12-22: Creep entry and peak divergence (+23.6% to +38.9% peer)
 PLANTED_BENCHMARK_EVENTS = [
     ("Delhi-Jaipur", "2024-11-11", "Acute unmitigated rate spike (+35.5% own, +21.0% peer)"),
+    ("Delhi-Jaipur", "2024-11-18", "Acute rate spike week 2 (+27.6% own, +19.7% peer)"),
     ("Ahmedabad-Mumbai", "2025-01-20", "Festival surcharge week justified by N002 (+29.5% own)"),
     ("Chennai-Bangalore", "2025-02-24", "Highway flood disruption justified by N001 (+31.5% own)"),
     ("Chennai-Bangalore", "2025-03-03", "Flood detour continuation justified by N001 (+22.8% own)"),
@@ -23,7 +37,7 @@ PLANTED_BENCHMARK_EVENTS = [
     ("Mumbai-Pune", "2025-12-22", "Sustained cost creep peak (+38.9% peer, +5.7% own)"),
 ]
 
-# Ground-truth labels for candidate verifications: (route, week_of) -> (flagged, matched_note_id)
+# Ground-truth labels for candidate pool
 GOLD_CANDIDATE_LABELS: dict[tuple[str, str], tuple[str, str]] = {
     ("Delhi-Jaipur", "2024-11-11"): ("Yes", ""),
     ("Delhi-Jaipur", "2024-11-18"): ("Yes", ""),
@@ -51,7 +65,7 @@ GOLD_CANDIDATE_LABELS: dict[tuple[str, str], tuple[str, str]] = {
 
 
 class AdversarialHallucinatingLLM(BaseLLMClient):
-    """Adversarial LLM client that attempts to justify every candidate with a specified note."""
+    """Offline adversarial stub that attempts to justify anomalies with invalid notes."""
 
     def __init__(self, forced_note_id: str) -> None:
         super().__init__(TokenCostTracker())
@@ -68,13 +82,26 @@ class AdversarialHallucinatingLLM(BaseLLMClient):
 
 
 def run_evaluation_suite(use_cache: bool = True) -> dict:
-    """Runs gold-set verifier scoring, planted events detector recall, and counterfactual checks."""
+    """Offline evaluation suite: assesses predictions, recall, and counterfactuals without LLM tokens."""
     settings = get_settings()
     settings.ensure_dirs()
 
-    df_sub, _df_full, _tracker, ctx = run_pipeline(use_cache=use_cache)
-    enriched_notes: dict[str, EnrichedContextNote] = ctx["enriched_notes"]
-    v_store: NoteVectorStore = ctx["vector_store"]
+    csv_path = settings.OUTPUT_DIR / "flagged_output.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Missing {csv_path}. Run pipeline once before evaluation.")
+
+    df_sub = pd.read_csv(csv_path, keep_default_na=False)
+
+    cache_path = settings.CACHE_DIR / "enriched_notes.json"
+    if not cache_path.exists():
+        raise FileNotFoundError("Missing cached enriched notes.")
+
+    with open(cache_path, "r", encoding="utf-8") as f:
+        cached_dict = json.load(f)
+    enriched_notes = {k: EnrichedContextNote(**v) for k, v in cached_dict.items()}
+
+    # Local Chroma vector store rebuild (0 tokens, local ONNX embeddings)
+    v_store = NoteVectorStore(notes=enriched_notes)
 
     predicted = {
         (row["route"], row["week_of"]): (row["flagged"], str(row["matched_note_id"] or ""))
@@ -85,7 +112,7 @@ def run_evaluation_suite(use_cache: bool = True) -> dict:
     detected_planted = sum(1 for (r, w, _) in PLANTED_BENCHMARK_EVENTS if (r, w) in predicted)
     detector_recall = round(detected_planted / len(PLANTED_BENCHMARK_EVENTS), 4)
 
-    # 2. Verifier Accuracy on Candidate Pool
+    # 2. Candidate Pool Verifier Accuracy
     verdict_matches = 0
     citation_matches = 0
     mismatches: list[dict] = []
@@ -103,7 +130,7 @@ def run_evaluation_suite(use_cache: bool = True) -> dict:
         if (got_flag, got_note) != (exp_flag, exp_note):
             mismatches.append({"route_week": key, "expected": (exp_flag, exp_note), "got": got})
 
-    # 3. End-to-End Counterfactual Traps through AnomalyVerifier
+    # 3. Counterfactual Traps (evaluated through local adversarial stub)
     counterfactual_results: list[dict] = []
 
     # Trap 1: N003 on Mumbai-Pune 2025-06-23 (peer gap +20.6% > 10.0%)
@@ -128,7 +155,7 @@ def run_evaluation_suite(use_cache: bool = True) -> dict:
         "reason": out_n003.reason,
     })
 
-    # Trap 2: N002 route-specific note with null end date evaluated 7 weeks later (2025-03-10)
+    # Trap 2: N002 route-specific note with null end date evaluated 7 weeks later
     mut_notes = dict(enriched_notes)
     mut_notes["N002"] = enriched_notes["N002"].model_copy(update={"effective_end_date": None})
     am_late = RouteWeekMetrics(
@@ -174,7 +201,7 @@ def run_evaluation_suite(use_cache: bool = True) -> dict:
         "reason": out_n001.reason,
     })
 
-    # Trap 4: N003 on Mumbai-Delhi 2025-05-12 (+11.6% own > 10.0% max ceiling)
+    # Trap 4: N003 on Mumbai-Delhi 2025-05-12 (+11.6% own > 10.0% ceiling)
     md_spike = RouteWeekMetrics(
         route="Mumbai-Delhi",
         route_type="Long",
@@ -210,7 +237,7 @@ def run_evaluation_suite(use_cache: bool = True) -> dict:
     report_path = settings.OUTPUT_DIR / "eval_report.json"
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
-    logger.info("Saved evaluation report to %s", report_path)
+    logger.info("Saved offline evaluation report to %s", report_path)
     return report
 
 

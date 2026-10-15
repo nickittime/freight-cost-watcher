@@ -31,15 +31,15 @@ class Settings(BaseSettings):
 
     LLM_PROVIDER: Literal["groq", "gemini", "stub"] = "groq"
     GROQ_API_KEY: SecretStr | None = None
-    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
+    PRICE_INPUT_PER_MTOK: float = 0.075
+    PRICE_OUTPUT_PER_MTOK: float = 0.30
     GEMINI_API_KEY: SecretStr | None = None
     GEMINI_MODEL: str = "gemini-2.5-flash"
     LLM_TEMPERATURE: float = 0.0
     LLM_SEED: int = 42
     LLM_MAX_RETRIES: int = 3
     LLM_TIMEOUT_S: float = 30.0
-    PRICE_INPUT_PER_MTOK: float = 0.15
-    PRICE_OUTPUT_PER_MTOK: float = 0.60
 
     @property
     def shipments_path(self) -> Path:

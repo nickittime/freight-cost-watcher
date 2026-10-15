@@ -1,0 +1,35 @@
+{
+  "candidate_pool_size": 22,
+  "planted_benchmark_events_count": 8,
+  "planted_events_detector_recall": 1.0,
+  "candidate_verifier_accuracy": 1.0,
+  "citation_accuracy": 1.0,
+  "mismatches": [],
+  "counterfactual_suite_passed": true,
+  "counterfactuals": [
+    {
+      "name": "all_routes_peer_divergence_trap_N003",
+      "passed": true,
+      "output_flagged": "Yes",
+      "reason": "Overridden: note N003 nationwide note ('All Routes') affects peer routes equally and cannot explain a +20.6% divergence vs similar-length peers. No valid context note justifies this cost rise. In-scope notes evaluated: N003 (2025-05-05): nationwide note ('All Routes') affects peer routes equally and cannot explain a +20.6% divergence vs similar-length peers. Flagged for review."
+    },
+    {
+      "name": "route_specific_null_end_date_7_weeks_later_N002",
+      "passed": true,
+      "output_flagged": "Yes",
+      "reason": "Overridden: note N002 falls outside the effective window (effective window closed on 2025-01-26 prior to week 2025-03-10). No valid context note justifies this cost rise. In-scope notes evaluated: N002 (2025-01-20): falls outside the effective window (effective window closed on 2025-01-26 prior to week 2025-03-10); N003 (2025-05-05): falls outside the effective window (effective window begins on 2025-05-05 after week 2025-03-10). Flagged for review."
+    },
+    {
+      "name": "post_flood_window_lingering_spike_N001",
+      "passed": true,
+      "output_flagged": "Yes",
+      "reason": "Overridden: note N001 falls outside the effective window (effective window closed on 2025-03-08 prior to week 2025-03-10). No valid context note justifies this cost rise. In-scope notes evaluated: N009 (2025-03-17): reports no cost increase ('none'), which cannot justify an increase; N001 (2025-02-24): falls outside the effective window (effective window closed on 2025-03-08 prior to week 2025-03-10). Flagged for review."
+    },
+    {
+      "name": "magnitude_ceiling_exceeded_Mumbai_Delhi_N003",
+      "passed": true,
+      "output_flagged": "Yes",
+      "reason": "Overridden: note N003 observed cost rise (+11.6%) significantly exceeds stated impact (+7.0%, ceiling +10.0%). No valid context note justifies this cost rise. In-scope notes evaluated: N003 (2025-05-05): observed cost rise (+11.6%) significantly exceeds stated impact (+7.0%, ceiling +10.0%). Flagged for review."
+    }
+  ]
+}

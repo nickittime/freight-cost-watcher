@@ -1,0 +1,289 @@
+{
+  "summary": {
+    "provider": "groq",
+    "model": "openai/gpt-oss-20b",
+    "unique_requests": 30,
+    "retry_attempts": 0,
+    "total_calls": 30,
+    "total_input_tokens": 16516,
+    "total_output_tokens": 14513,
+    "total_tokens": 31029,
+    "price_input_per_mtok": 0.075,
+    "price_output_per_mtok": 0.3,
+    "input_cost_usd": 0.001239,
+    "output_cost_usd": 0.004354,
+    "total_cost_usd": 0.005593
+  },
+  "call_records": [
+    {
+      "timestamp": "2026-10-15T06:52:59.913237+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 846,
+      "completion_tokens": 2048,
+      "retries": 0,
+      "context": "enrich_all_notes_batch"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:14.619052+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 391,
+      "completion_tokens": 357,
+      "retries": 0,
+      "context": "enrich_N004"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:18.080201+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 391,
+      "completion_tokens": 387,
+      "retries": 0,
+      "context": "enrich_N005"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:24.420347+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 388,
+      "completion_tokens": 296,
+      "retries": 0,
+      "context": "enrich_N006"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:28.868239+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 390,
+      "completion_tokens": 385,
+      "retries": 0,
+      "context": "enrich_N007"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:36.475239+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 392,
+      "completion_tokens": 380,
+      "retries": 0,
+      "context": "enrich_N008"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:39.899924+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 388,
+      "completion_tokens": 1145,
+      "retries": 0,
+      "context": "enrich_N009"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:50.795818+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 391,
+      "completion_tokens": 275,
+      "retries": 0,
+      "context": "enrich_N010"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:52.896714+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 612,
+      "completion_tokens": 242,
+      "retries": 0,
+      "context": "verify_Ahmedabad-Mumbai_2025-01-20"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:57.496727+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 670,
+      "completion_tokens": 284,
+      "retries": 0,
+      "context": "verify_Chennai-Bangalore_2025-02-24"
+    },
+    {
+      "timestamp": "2026-10-15T06:53:59.102747+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 670,
+      "completion_tokens": 490,
+      "retries": 0,
+      "context": "verify_Chennai-Bangalore_2025-03-03"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:10.613093+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 670,
+      "completion_tokens": 1194,
+      "retries": 0,
+      "context": "verify_Chennai-Bangalore_2025-03-10"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:23.899601+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 670,
+      "completion_tokens": 416,
+      "retries": 0,
+      "context": "verify_Chennai-Bangalore_2025-03-17"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:27.579184+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 607,
+      "completion_tokens": 337,
+      "retries": 0,
+      "context": "verify_Delhi-Jaipur_2024-11-11"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:31.419030+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 607,
+      "completion_tokens": 410,
+      "retries": 0,
+      "context": "verify_Delhi-Jaipur_2024-11-18"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:33.076076+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 607,
+      "completion_tokens": 396,
+      "retries": 0,
+      "context": "verify_Mumbai-Delhi_2025-05-12"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:42.009497+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 320,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-06-23"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:48.861725+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 415,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-09-15"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:51.644949+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 463,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-09-22"
+    },
+    {
+      "timestamp": "2026-10-15T06:54:53.243597+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 395,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-10-06"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:05.496055+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 377,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-10-13"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:12.060994+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 358,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-10-20"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:16.861055+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 342,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-10-27"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:21.515424+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 393,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-11-03"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:23.002670+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 452,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-11-17"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:30.779020+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 348,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-11-24"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:35.684941+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 442,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-12-01"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:41.374597+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 388,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-12-08"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:46.275805+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 406,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-12-15"
+    },
+    {
+      "timestamp": "2026-10-15T06:55:51.641935+00:00",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "prompt_tokens": 559,
+      "completion_tokens": 372,
+      "retries": 0,
+      "context": "verify_Mumbai-Pune_2025-12-22"
+    }
+  ]
+}

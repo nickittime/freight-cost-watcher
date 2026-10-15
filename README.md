@@ -4,7 +4,7 @@ A production-grade, reproducible AI decision system that monitors weekly road fr
 
 ---
 
-## 1. System Topology & Architecture
+## 1. System Architecture
 
 ```
                                +-----------------------------+
@@ -40,7 +40,7 @@ A production-grade, reproducible AI decision system that monitors weekly road fr
 |   context_notes.csv   |        +----------------------------+
 |  (10 real-world notes)|        | Stage 4: Grounded Verifier |
 +-----------+-----------+        | - ChromaDB RAG (Top-5)     |
-            |                    | - Groq gpt-oss-120b (T=0)  |
+            |                    | - Groq gpt-oss-20b (T=0)   |
             v                    +--------------+-------------+
 +-----------------------+                       |
 | One-Time Note Indexer |                       v
@@ -63,36 +63,38 @@ A production-grade, reproducible AI decision system that monitors weekly road fr
 
 ---
 
-## 2. Mathematical Definitions & Baseline Modeling
+## 2. Mathematical Modeling & Baseline Engine
 
 ### 2.1 Group-Level Ratio-of-Sums
-Weekly cost per tonne-km is calculated strictly at the group level as the ratio of sums (freight cost divided by payload-distance), not as the average of shipment ratios:
+Corridor freight economics cannot be calculated as the average of individual shipment cost ratios, as that gives disproportionate mathematical weight to lightweight shipments. Weekly unit cost per tonne-km is calculated strictly at the group level as the ratio of sums:
+
 $$\text{cost\_per\_tonne\_km}_{r, w} = \frac{\sum_{i \in (r, w)} \text{freight\_cost\_inr}_i}{\sum_{i \in (r, w)} (\text{quantity\_tonnes}_i \times \text{distance\_km}_i)}$$
-Averaging individual shipment ratios would distort corridor economics by giving disproportionate weight to lightweight shipments.
 
-### 2.2 Own-History Trailing Window (Zero Look-Ahead)
-- Enforces an $O(\text{window}) = O(8)$ calendar-bounded rolling deque per route over strictly prior Mondays (maximum lookback: 56 calendar days).
-- Evaluates strictly prior weeks (`shift(1)`), preventing data leakage.
-- **Missing History Policy**: For routes with fewer than 8 prior weeks, the baseline averages all available prior weeks without artificial padding or extrapolation. A route's first week has no prior baseline and is formatted as `"N/A (no prior history)"`.
+### 2.2 Own-History Trailing Baseline (Zero Look-Ahead)
+- Enforces an $O(\text{window}) = O(8)$ calendar-bounded rolling deque per corridor over strictly prior Mondays (maximum 56 calendar days).
+- Evaluates strictly prior weeks (`shift(1)`), preventing look-ahead data leakage.
+- **Missing History Policy**: For routes with fewer than 8 prior weeks, the baseline averages available prior weeks without artificial padding or extrapolation. The initial week of a corridor has no prior history and is formatted as `"N/A (no prior history)"`.
 
-### 2.3 Peer Average Baseline (Leave-One-Out)
-For each week and `route_type` bucket (Short, Medium, Long), the peer baseline excludes the evaluated route itself:
+### 2.3 Peer Corridor Baseline (Leave-One-Out)
+For each week and corridor distance category (`Short`, `Medium`, `Long`), the peer baseline excludes the corridor itself to avoid self-influence:
+
 $$\text{peer\_baseline}_{r, w} = \frac{\sum_{j \in \text{type}(r)} \text{cptk}_{j, w} - \text{cptk}_{r, w}}{N_{\text{type}(r)} - 1}$$
+
 Computed in constant $O(1)$ time per row from bucket aggregates.
 
 ---
 
 ## 3. Anomaly Detection & Hysteresis Design
 
-Standard thresholding flags acute price jumps but fails on quiet cost creep. On `Mumbai-Pune`, costs rose gradually from ~₹3.41 to ₹4.49 in late 2025. Because the rise was continuous, the trailing 8-week baseline adjusted upward with the route, keeping `vs_own_history` modest (+5% to +9%) while `vs_similar_routes` surged to +38.9%.
+Static thresholding detects acute price spikes but fails on quiet cost creep. On `Mumbai-Pune` during late 2025, freight rates climbed gradually from ~₹3.41 to ₹4.49 per tonne-km. Because the increase was continuous, the trailing 8-week baseline adjusted upward with the corridor, keeping own-history deviation modest (+5% to +9%) while peer divergence climbed to +38.9%.
 
-A static threshold of `vs_peer >= 20% AND vs_own >= 5%` toggles erratically across consecutive weeks. We implemented a **hysteresis state machine**:
+Static dual thresholds toggle erratically across consecutive weeks. We implemented a **hysteresis state machine**:
 1. **Acute Spike Trigger**: `vs_own_pct >= 10.0%`.
 2. **Sustained Creep Entry**: `vs_peer_pct >= 20.0%` AND `vs_own_pct >= 5.0%`.
-3. **Hysteresis Sustain**: Once entered, the route remains flagged while `vs_peer_pct >= 15.0%` AND `vs_own_pct > 0.0%`.
+3. **Hysteresis Sustain**: Once entered, the corridor remains flagged as long as `vs_peer_pct >= 15.0%` AND `vs_own_pct > 0.0%`.
 
 ### Threshold Sensitivity Analysis
-Generated directly from `AnomalyDetector.run_sensitivity_analysis()` across all 728 route-weeks:
+Generated across all 728 route-weeks:
 
 | Spike Threshold | Creep Peer Entry | Min Own Rise | Hysteresis Keep | Candidate Pool | Behavior |
 | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -104,41 +106,42 @@ Generated directly from `AnomalyDetector.run_sensitivity_analysis()` across all 
 
 ---
 
-## 4. Anti-Hallucination Guardrails & Edge Cases
+## 4. Deterministic Anti-Hallucination Guardrails
 
-Every `"justified"` verdict proposed by the LLM must pass deterministic verification rules in `src/guardrails.py` before inclusion:
+Every justification proposed by the LLM must pass pure Python deterministic validation checks before inclusion:
 
-1. **Route Scope Gate**: `note.applies_to` must match `route` or `"All Routes"`. Distractor note `N004` (affecting corridors outside the dataset) is blocked.
-2. **Temporal Window & Route-Specific Horizon**:
-   - `Chennai-Bangalore` flooding (`N001`, Feb 24 to Mar 8, passable Mar 9) justifies weeks `2025-02-24` and `2025-03-03`, but is overridden to `Yes` (Unexplained) on `2025-03-10` and `2025-03-17`.
-   - Route-specific notes with open-ended or null end dates (e.g., `N002` on `Ahmedabad-Mumbai`) default to a strict **1-week window** (`start_date + 6 days`), preventing short-term surcharges from justifying cost increases weeks later.
-3. **Causal Direction Gate**: Notes describing absorbed costs (`N010`), unaffected costs (`N005`), or normal operations (`N006`, `N007`, `N008`, `N009`) cannot justify a cost increase.
-4. **Nationwide (`All Routes`) Peer Divergence Gate**: A nationwide cost shift (`N003`, diesel +5–7%) affects peer routes equally. If a corridor diverges from same-week peers by more than 10.0% (e.g., `Mumbai-Pune` on `2025-06-23` with +6.2% own, +20.6% peer), `N003` is rejected because general fuel increases cannot explain corridor-specific divergence.
-5. **Magnitude Ceiling (`Mumbai-Delhi 2025-05-12`)**: `N003` states diesel rose by roughly 5–7%. With a +3.0% tolerance ceiling (10.0% max allowed), `Mumbai-Delhi` on `2025-05-12` (+11.6% own, +6.7% peer) exceeds this boundary and is deliberately flagged as `Yes` (Unexplained) for human audit.
+1. **Corridor Scope Gate**: `note.applies_to` must match `route` or `"All Routes"`. Distractor note `N004` (affecting corridors outside the dataset) is blocked.
+2. **Temporal Window Gate**:
+   - `Chennai-Bangalore` flooding (`N001`, Feb 24 to Mar 8, passable Mar 9) justifies weeks `2025-02-24` and `2025-03-03`. Lingering weeks `2025-03-10` and `2025-03-17` fall outside the flood window and are forced to `Yes` (Unexplained).
+   - Route-specific notes with null end dates (e.g., `N002` on `Ahmedabad-Mumbai`) default to a **1-week window** (`start_date + 6 days`), preventing short-term surcharges from justifying increases months later.
+3. **Causal Direction Gate**: Notes describing absorbed costs (`N010`), routine maintenance (`N005`), or normal operations (`N006`, `N007`, `N008`, `N009`) cannot justify an increase.
+4. **Nationwide Peer Gap Gate**: A nationwide shift (`N003`, diesel +5–7%) affects peer routes equally. If a corridor diverges from same-week peers by more than 10.0% (e.g., `Mumbai-Pune` on `2025-06-23` with +6.2% own, +20.6% peer), `N003` is rejected.
+5. **Magnitude Ceiling Gate**: `Mumbai-Delhi` on `2025-05-12` saw an 11.6% rise, exceeding the stated diesel impact of 5–7% (+3.0% tolerance ceiling = 10.0% max). It is flagged as `Yes` (Unexplained) for human review.
 
 ---
 
-## 5. Verification, Evaluation Harness & Reproducibility
+## 5. Evaluation, Planted Benchmarks & Reproducibility
 
-### 5.1 Dual-Engine Baseline Cross-Check
-The streaming `deque` baseline engine is cross-checked against a vectorized `pandas` rolling reference across all 728 route-weeks (`rtol=1e-12`), ensuring zero numerical drift and confirming zero look-ahead data leakage.
+### 5.1 Detector Recall on Planted Benchmark Events
+To verify the detector does not suffer from false negatives, recall was evaluated against 9 planted operational events:
+- **Operational Notes**: `N001` flooding weeks (`2025-02-24`, `2025-03-03`) and `N002` festival surcharge (`2025-01-20`).
+- **Empirical Corridors**: Acute rate surges on `Delhi-Jaipur` (`2024-11-11`, `2024-11-18`), post-flood lingering weeks on `Chennai-Bangalore` (`2025-03-10`), diesel ceiling excess on `Mumbai-Delhi` (`2025-05-12`), and creep entry/peak on `Mumbai-Pune` (`2025-09-15`, `2025-12-22`).
+- **Result**: **100% Detector Recall** (9/9 benchmark events captured in candidate pool).
 
-### 5.2 End-to-End Evaluation Harness (`src/evaluation/eval_harness.py`)
-- Evaluates the pipeline against an independently authored **22-row Gold Set** established from raw context notes and ground-truth logistics events:
-  - **Verdict Accuracy**: 100% (22/22)
-  - **Citation Accuracy**: 100% (22/22)
-- Executes 4 end-to-end adversarial counterfactual tests forcing an adversarial client to propose invalid citations, confirming that the deterministic guardrail intercepts all 4 traps and forces verdicts to `Yes` (Unexplained).
+### 5.2 Verifier Accuracy & Adversarial Traps (`outputs/eval_report.json`)
+- Evaluated against candidate pool ground truth:
+  - **Candidate Verifier Accuracy**: 100% (22/22)
+  - **Citation Precision**: 100% (22/22)
+- Evaluated against 4 adversarial counterfactual scenarios (forcing an adversarial client to propose invalid notes). The guardrail gate intercepted all 4 traps.
 
-### 5.3 3-Process Cold Reproducibility Proof
-Because `openai/gpt-oss-120b` is an open-weights reasoning model that expends reasoning tokens per completion (~490 output tokens per call), reason text is synthesized deterministically from verified structured fields. Across 3 separate cold subprocesses (`python -m src.main --no-cache`), all graded columns and CSV SHA-256 hashes are 100% bit-identical.
+### 5.3 3-Process Cold Reproducibility Proof (`outputs/reproducibility_report.txt`)
+Across 3 independent cold subprocesses (`python -m src.main --no-cache`), all graded columns and CSV SHA-256 hashes are 100% bit-identical (`dfd05c28dc1fe65c3d122f2c347b3acc60b8f7b6b3b190292c9733662ff42023`).
 
 ---
 
 ## 6. Setup, Execution & Cost Accounting
 
-### 6.1 Installation
-On first run, ChromaDB downloads the `all-MiniLM-L6-v2` ONNX model (~79 MB) to `~/.cache/chroma/`. In Docker builds, this model is baked into the image.
-
+### 6.1 Setup
 ```bash
 python -m venv venv
 # Windows: venv\Scripts\activate | Linux/macOS: source venv/bin/activate
@@ -149,46 +152,47 @@ copy .env.example .env
 
 ### 6.2 Execution Commands
 ```bash
-# 1. Full pipeline run (generates flagged_output.csv & token_cost_log.json)
-python -m src.main --no-cache
+# 1. Run unit test suite (39 tests, offline)
+python -m pytest
 
-# 2. End-to-end evaluation harness (generates eval_report.json)
+# 2. Run offline evaluation harness (0 tokens)
 python -m src.evaluation.eval_harness
 
-# 3. 3-process cold reproducibility check (generates reproducibility_report.txt)
+# 3. Run 3-process cold reproducibility harness
 python -m src.evaluation.repro_check
 
-# 4. Run automated pytest test suite
-pytest
+# 4. Run main pipeline
+python -m src.main --no-cache
 
-# 5. Interactive tool-calling agent CLI
+# 5. Interactive tool-calling agent CLI (Stretch Goal)
 python -m src.main --ask "Why did Chennai-Bangalore get pricier in February and March 2025?"
 ```
 
 ### 6.3 Operational Token & Cost Accounting (`outputs/token_cost_log.json`)
-By pruning 706 of 728 route-weeks (97.0%) prior to LLM verification, a cold run requires **23 LLM calls** (1 batch note enrichment + 22 candidate verifications; 22 calls on warm cache).
+Pre-gating prunes 706 of 728 route-weeks (97.0%) prior to LLM verification.
 
-- **Provider / Model**: `groq` / `openai/gpt-oss-120b` (temp=0.0, seed=42)
-- **Published Rates**: $0.15 / 1M input tokens, $0.60 / 1M output tokens (checked October 2026)
-- **Total LLM Calls**: 23 calls
-- **Input Tokens**: 13,785 tokens ($0.002068 USD)
-- **Output Tokens**: 11,257 tokens ($0.006754 USD)
-- **Total Operational Cost**: **$0.008822 USD (under 1 cent)**
+- **Provider / Model**: `groq` / `openai/gpt-oss-20b` (temp=0.0, seed=42)
+- **Published Rates**: $0.075 / 1M input tokens, $0.30 / 1M output tokens (checked October 2026)
+- **Total LLM Calls**: 19 calls (19 unique requests, 0 retries)
+- **Input Tokens**: 11,381 tokens ($0.000854 USD)
+- **Output Tokens**: 9,230 tokens ($0.002769 USD)
+- **Total Tokens**: 20,611
+- **Total Operational Cost**: **$0.003623 USD (approx. 0.36 cents)**
 
 ---
 
-## 7. Assumptions, Design Tradeoffs & Future Work
+## 7. Assumptions, Tradeoffs & Future Work
 
 ### Assumptions
-1. **Directional Corridors**: Routes are treated as directed pairs (`Origin-Destination`). `Mumbai-Pune` and `Pune-Mumbai` represent distinct freight corridors with different elevation profiles, toll structures, and backhaul demand.
+1. **Directional Corridors**: Corridors are treated as directed pairs (`Origin-Destination`) because elevation profiles, toll structures, and backhaul demand differ by direction.
 2. **Monday-Anchored Weeks**: Weeks are identified by the Monday date (`YYYY-MM-DD`) of the shipment week.
-3. **Conservative Review Policy**: Any candidate anomaly lacking verified, unambiguous evidence degrades to `Yes` (Unexplained). In logistics operations, flagging an anomaly for human audit carries significantly lower business risk than providing a false justification.
+3. **Conservative Review Policy**: Candidate anomalies lacking unambiguous evidence degrade to `Yes` (Unexplained). Flagging an anomaly for human audit carries lower operational risk than a false justification.
 
 ### Design Tradeoffs
-1. **Deterministic Reason Synthesis vs. Free-Form Generation**: Rather than passing raw LLM text into the final CSV, reason explanations are synthesized deterministically from verified structured fields. This trades stylistic variety for guaranteed non-contradiction and bit-stable CSV reproducibility across runs.
-2. **Hybrid Scope-Complete Retrieval vs. Pure Dense Search**: Dense semantic search alone can miss short temporal notes. Our hybrid retriever guarantees the inclusion of all notes scoped to the corridor or `"All Routes"`, ranked by date proximity and dense similarity.
+1. **Diagnostic Reason Synthesis vs. Free-Form Generation**: Rather than passing raw LLM completion text into the final CSV, reason explanations are synthesized from verified diagnostic checks. This trades stylistic variation for guaranteed non-contradiction and bit-stable CSV reproducibility across runs.
+2. **Hybrid Scope-Complete Retrieval vs. Pure Dense Search**: Dense semantic search alone can miss short temporal notes. Our hybrid retriever guarantees the inclusion of all notes scoped to the corridor or `"All Routes"`, ranked by temporal proximity.
 
 ### Future Work
-1. **Dynamic Seasonal Indexing**: Incorporating multi-year calendar awareness (e.g., Diwali and regional festival shifts) into baseline calculations.
-2. **Carrier-Level Fixed-Effects Decomposition**: Decomposing freight cost increases into transporter-specific rate changes versus general corridor cost inflation.
+1. **Dynamic Seasonal Indexing**: Incorporating multi-year calendar awareness (e.g., regional festival shifts) into baseline calculations.
+2. **Carrier Fixed-Effects Decomposition**: Decomposing freight cost increases into transporter-specific rate changes versus corridor-wide inflation.
 3. **Asynchronous Batched Verification**: Utilizing asynchronous client pools for processing enterprise shipment datasets covering thousands of active corridors.

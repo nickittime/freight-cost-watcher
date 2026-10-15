@@ -45,7 +45,7 @@ def diagnose_note_failure(
 
     # 2. Causal cost effect check
     if note.cost_effect != "increase":
-        return f"describes '{note.cost_effect}' in costs, which cannot justify an increase"
+        return f"reports no cost increase ('{note.cost_effect}'), which cannot justify an increase"
 
     # 3. Temporal overlap check
     week_sunday = week_monday + timedelta(days=6)

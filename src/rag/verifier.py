@@ -1,5 +1,5 @@
-import json
 from datetime import datetime
+import json
 
 from src.config import get_settings
 from src.exceptions import FreightWatcherError
@@ -37,30 +37,33 @@ def build_deterministic_reason(
     guardrail_override_reason: str | None,
     retrieved_notes: list[EnrichedContextNote],
     enriched_notes: dict[str, EnrichedContextNote],
+    max_proximity_days: int = 90,
 ) -> str:
     """
     Constructs an explanation entirely from verified structured fields and retrieval diagnostics.
-    Guaranteed: Contains ZERO hard-coded route or week string literals.
+    Zero hard-coded route or date literals.
     """
     if final_verdict == "justified" and verified_note_id:
         note = enriched_notes[verified_note_id]
         own_str = f"+{m.vs_own_pct:.1f}%" if m.vs_own_pct is not None else "cost"
         return (
             f"Matches verified note {note.note_id} dated {note.note_date}: {note.note} "
-            f"Corridor disruption explains the {own_str} rate increase."
+            f"Corridor disruption is consistent with the {own_str} rate increase."
         )
 
     week_monday = datetime.strptime(m.week_of, "%Y-%m-%d").date()
     settings = get_settings()
 
-    # Filter in-scope notes ranked by date proximity
+    # Filter in-scope notes within relevance proximity (excludes distant 6-month notes)
     in_scope_notes = [
-        n for n in retrieved_notes if n.applies_to in (m.route, "All Routes")
+        n for n in retrieved_notes
+        if n.applies_to in (m.route, "All Routes")
+        and abs((week_monday - n.note_date).days) <= max_proximity_days
     ]
     in_scope_notes.sort(key=lambda n: abs((week_monday - n.note_date).days))
 
     rejection_details: list[str] = []
-    for note in in_scope_notes[:2]:  # Top-2 closest in-scope notes
+    for note in in_scope_notes[:2]:
         diag = diagnose_note_failure(
             note=note,
             route=m.route,

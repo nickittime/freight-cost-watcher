@@ -114,6 +114,7 @@ class GroqClient(BaseLLMClient):
 
         raise LLMProviderError("All Groq model completion attempts failed.")
 
+
 class GeminiClient(BaseLLMClient):
     """Google Gemini client with rate-limit-aware retry backoff and temp=0."""
 

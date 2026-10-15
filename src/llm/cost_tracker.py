@@ -18,23 +18,15 @@ class TokenCostTracker:
     ) -> None:
         settings = get_settings()
         self.provider: str = settings.LLM_PROVIDER
-        self.model: str = (
-            settings.GROQ_MODEL
-            if settings.LLM_PROVIDER == "groq"
-            else settings.GEMINI_MODEL
-            if settings.LLM_PROVIDER == "gemini"
-            else "offline-test-stub"
-        )
+        self.model: str = settings.GROQ_MODEL
         self.price_input = (
-            price_input_per_mtok
-            if price_input_per_mtok is not None
-            else settings.PRICE_INPUT_PER_MTOK
+            price_input_per_mtok if price_input_per_mtok is not None else settings.PRICE_INPUT_PER_MTOK
         )
         self.price_output = (
-            price_output_per_mtok
-            if price_output_per_mtok is not None
-            else settings.PRICE_OUTPUT_PER_MTOK
+            price_output_per_mtok if price_output_per_mtok is not None else settings.PRICE_OUTPUT_PER_MTOK
         )
+        self.total_requests: int = 0
+        self.total_retries: int = 0
         self.total_calls: int = 0
         self.total_input_tokens: int = 0
         self.total_output_tokens: int = 0
@@ -47,8 +39,11 @@ class TokenCostTracker:
         model: str,
         context: str = "",
         provider: str | None = None,
+        retries: int = 0,
     ) -> None:
-        self.total_calls += 1
+        self.total_requests += 1
+        self.total_retries += retries
+        self.total_calls += 1 + retries
         self.total_input_tokens += prompt_tokens
         self.total_output_tokens += completion_tokens
         if provider:
@@ -60,6 +55,7 @@ class TokenCostTracker:
             "model": model,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
+            "retries": retries,
             "context": context,
         })
 
@@ -69,15 +65,17 @@ class TokenCostTracker:
         return {
             "provider": self.provider,
             "model": self.model,
+            "unique_requests": self.total_requests,
+            "retry_attempts": self.total_retries,
             "total_calls": self.total_calls,
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
             "total_tokens": self.total_input_tokens + self.total_output_tokens,
+            "price_input_per_mtok": self.price_input,
+            "price_output_per_mtok": self.price_output,
             "input_cost_usd": round(in_cost, 6),
             "output_cost_usd": round(out_cost, 6),
             "total_cost_usd": round(in_cost + out_cost, 6),
-            "price_input_per_mtok": self.price_input,
-            "price_output_per_mtok": self.price_output,
         }
 
     def save_log(self, output_path: Path) -> None:
