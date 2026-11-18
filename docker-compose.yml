@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: freight_cost_watcher
     environment:
-      - LLM_PROVIDER=fake
+      - LLM_PROVIDER=stub
       - LOG_LEVEL=INFO
     volumes:
       - ./outputs:/app/outputs

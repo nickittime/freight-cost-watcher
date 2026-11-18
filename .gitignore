@@ -9,4 +9,4 @@ freight_cost_watcher.egg-info/
 build/
 dist/
 .pytest_cache/
-.ruff_cache/
+.ruff_cache/outputs/app.log
